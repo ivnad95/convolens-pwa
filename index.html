@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f9fc" />
+  <meta name="description" content="ConvoLens — accessible live captions, microphone feedback and communication tools for everyday conversations." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ConvoLens" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>ConvoLens — See the conversation</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#listen" aria-label="ConvoLens home">
+        <span class="brand-logo" aria-hidden="true">
+          <svg width="25" height="25" viewBox="0 0 28 28" fill="none"><path d="M5 15.5V12.5M10 21V7M15 24V4M20 18.5V9.5M25 15.5V12.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" /></svg>
+        </span>
+        <span class="brand-text">convo<span>lens</span></span>
+      </a>
+      <div class="header-actions">
+        <span class="beta-label">OPEN BETA · PWA</span>
+        <button class="install-button" id="installButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg><span>Install app</span></button>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="side-label">WORKSPACE</div>
+        <nav class="nav-items" aria-label="App sections">
+          <button class="nav-item active" data-page="listen" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h2l2-6 4 12 4-15 2 9h2"/></svg>Live captions <span class="nav-active-mark"></span></button>
+          <button class="nav-item" data-page="reply"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H9l-5 4V5Z"/></svg>Type a reply</button>
+          <button class="nav-item" data-page="saved"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v17l-6-4-6 4V4Z"/></svg>Saved conversations <span id="savedCount" class="count-badge">0</span></button>
+          <button class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M16 14v6"/></svg>Preferences</button>
+        </nav>
+        <div class="side-bottom">
+          <div class="privacy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-3 8-8 10-5-2-8-5-8-10V6l8-4Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <div><strong>Privacy by design</strong><p>Saved transcripts stay on this device. Your browser's speech service may process audio remotely.</p></div>
+        </div>
+      </aside>
+
+      <section class="page page-listen" id="page-listen" aria-labelledby="listenTitle">
+        <div class="page-header">
+          <div><div class="eyebrow"><span class="eyebrow-line"></span>YOUR ACCESSIBLE SPACE</div><h1 id="listenTitle">See the <em>conversation.</em></h1><p class="subtitle">Real-time captions, designed for the moments that matter.</p></div>
+          <span class="session-pill" id="sessionPill"><span class="status-dot"></span><span id="sessionStatus">Ready to listen</span></span>
+        </div>
+        <div class="content-grid">
+          <div class="primary-column">
+            <section class="transcript-panel panel" aria-label="Live conversation">
+              <div class="panel-heading">
+                <div class="panel-heading-title"><span class="panel-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h2l2-5 4 10 4-13 2 8h2"/></svg></span><div><strong>Live conversation</strong><small id="sessionMeta">Your captions will appear here</small></div></div>
+                <button class="ghost-action" id="clearButton" type="button" title="Clear session" aria-label="Clear this session"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m-8 0 1 14h8l1-14M10 11v6m4-6v6"/></svg></button>
+              </div>
+              <div id="transcriptViewport" class="transcript-viewport" tabindex="0">
+                <div id="emptyState" class="empty-state">
+                  <div class="illustration-circle" aria-hidden="true"><div class="illustration-ring ring-outer"></div><div class="illustration-ring ring-inner"></div><div class="illustration-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+                  <h2>A little more understanding.</h2><p>Tap <strong>Start listening</strong> to begin. Your words will appear here as the conversation happens.</p>
+                  <span class="empty-hint">Microphone access is only requested when you start.</span>
+                </div>
+                <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+                <div class="interim" id="interim" aria-live="off" hidden><div class="interim-avatar">···</div><span id="interimText"></span></div>
+              </div>
+              <div class="transcript-controls">
+                <button id="listenButton" class="primary-button" type="button"><svg id="listenIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v3m-4 0h8"/></svg><span id="listenLabel">Start listening</span></button>
+                <div class="control-pair"><button id="saveButton" class="secondary-button" type="button" title="Save transcript"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h14l2 2v14H4V4Zm3 0v6h9V4M7 20v-7h10v7"/></svg><span>Save</span></button><button id="copyButton" class="secondary-button" type="button" title="Copy transcript"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg><span>Copy</span></button></div>
+              </div>
+            </section>
+            <div class="notice" id="notice" role="status" aria-live="polite"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8v.1"/></svg><span id="noticeText">For best results, keep the app open and the microphone unobstructed.</span></div>
+          </div>
+          <div class="insights-column">
+            <section class="panel sound-panel" aria-labelledby="soundTitle"><div class="mini-heading"><div class="mini-label">AUDIO AWARENESS</div><span class="live-chip" id="micChip">Mic off</span></div><h2 id="soundTitle">What's happening nearby?</h2><p class="panel-description">Understand the microphone input while you listen.</p><div class="wave-display" id="waveDisplay" aria-hidden="true"><canvas id="waveCanvas" width="460" height="112"></canvas></div><div class="signal-heading"><span>Microphone signal</span><strong id="signalText">Not active</strong></div><div class="signal-track" role="meter" aria-label="Microphone input level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="signalMeter"><div class="signal-fill" id="signalFill"></div></div><div class="meter-labels"><span>Quiet</span><span>Strong</span></div><p class="meter-footnote" id="signalHelp">Signal level is not a measurement of distance or speech clarity.</p></section>
+            <section class="panel intelligence-panel" aria-labelledby="intelligenceTitle"><div class="mini-label">INTELLIGENCE STATUS</div><h2 id="intelligenceTitle">Built for real conversations.</h2><div class="feature-row"><div class="feature-icon available"><svg viewBox="0 0 24 24"><path d="M4 12h2l2-5 4 10 4-13 2 8h2"/></svg></div><div><strong>Live speech captions</strong><small id="captionAvailability">Checking browser support…</small></div><span id="captionBadge" class="feature-status">Checking</span></div><div class="feature-row"><div class="feature-icon upcoming"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0v2m1-6a5 5 0 0 1 7 5v1"/></svg></div><div><strong>Identify who is talking</strong><small>Manual labels now; AI speaker detection to integrate</small></div><span class="feature-status soon">Planned</span></div><div class="feature-row"><div class="feature-icon upcoming"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 9l11-2M5 21a4 3 0 1 0 0-6 4 3 0 0 0 0 6Zm11-2a4 3 0 1 0 0-6 4 3 0 0 0 0 6Z"/></svg></div><div><strong>Speech vs background singing</strong><small>Requires an audio-classification and separation model</small></div><span class="feature-status soon">Planned</span></div></section>
+            <button class="tip-card" id="howButton" type="button"><span class="tip-icon"><svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-4 13v3h8v-3a7 7 0 0 0-4-13ZM9 22h6M12 7v5m0 3v.1"/></svg></span><span><strong>How this prototype works</strong><small>Capabilities, limitations and privacy</small></span><svg class="tip-arrow" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-reply" aria-labelledby="replyTitle" hidden>
+        <div class="page-header"><div><div class="eyebrow"><span class="eyebrow-line"></span>EXPRESS YOURSELF</div><h1 id="replyTitle">Your voice, <em>your way.</em></h1><p class="subtitle">Type something to say aloud or show clearly on screen.</p></div></div>
+        <div class="single-column"><div class="panel reply-panel"><label for="replyText">YOUR MESSAGE</label><textarea id="replyText" rows="5" maxlength="800" placeholder="Type what you'd like to say…"></textarea><div class="reply-actions"><button class="primary-button" id="speakButton" type="button"><svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4Zm12-2a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg> Speak aloud</button><button class="secondary-button" id="showReplyButton" type="button"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zM7 9h10m-10 4h7"/></svg> Show fullscreen</button><button class="text-button" id="stopSpeakButton" type="button">Stop speaking</button></div><div class="note-box">Text-to-speech uses your device's available system voices. No account is required.</div></div></div>
+      </section>
+
+      <section class="page" id="page-saved" aria-labelledby="savedTitle" hidden><div class="page-header"><div><div class="eyebrow"><span class="eyebrow-line"></span>YOUR NOTES</div><h1 id="savedTitle">Saved <em>conversations.</em></h1><p class="subtitle">Nothing is saved unless you choose to save it.</p></div></div><div class="single-column"><div id="savedList" class="saved-list"></div></div></section>
+
+      <section class="page" id="page-settings" aria-labelledby="settingsTitle" hidden><div class="page-header"><div><div class="eyebrow"><span class="eyebrow-line"></span>MADE FOR YOU</div><h1 id="settingsTitle">Make it <em>yours.</em></h1><p class="subtitle">Make every conversation easier to read.</p></div></div><div class="single-column"><div class="panel settings-panel"><label for="languageSelect">Caption language</label><select id="languageSelect"><option value="en-GB">English (United Kingdom)</option><option value="en-US">English (United States)</option><option value="ro-RO">Română</option><option value="es-ES">Español</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option></select><p class="setting-hint">Recognition availability depends on your browser and installed language support.</p><div class="setting-divider"></div>
+            <label for="captionEngineSelect">Caption engine</label>
+            <select id="captionEngineSelect"><option value="browser">Browser speech recognition (quick start)</option><option value="server">Self-hosted WhisperLiveKit (AI)</option></select>
+            <p class="setting-hint">The AI option streams microphone audio to a server you configure. Use a trusted server with HTTPS/WSS and a clear privacy policy.</p>
+            <div id="serverConfig" hidden class="server-config">
+              <label for="serverUrl">WhisperLiveKit WebSocket endpoint</label>
+              <input id="serverUrl" type="url" inputmode="url" placeholder="wss://your-domain.example/asr" autocomplete="off" spellcheck="false" />
+              <p class="setting-hint">Requires a WhisperLiveKit server started with <code>--pcm-input</code> and reachable securely from your phone.</p>
+              <label class="toggle-line" for="diarizationToggle"><span><strong>Server has speaker diarisation enabled</strong><small>Only enable after starting WhisperLiveKit with --diarization</small></span><input type="checkbox" id="diarizationToggle" /></label>
+            </div>
+            <div class="setting-divider"></div><label for="fontSizeSelect">Caption size</label><select id="fontSizeSelect"><option value="regular">Comfortable</option><option value="large">Large</option><option value="extra">Extra large</option></select><div class="setting-divider"></div><label class="toggle-line" for="vibrationToggle"><span><strong>Vibration on new caption</strong><small>Where supported by your device and browser</small></span><input type="checkbox" id="vibrationToggle" /></label><div class="setting-divider"></div><button id="deleteAllButton" class="danger-link" type="button">Delete all saved conversations</button></div></div></section>
+    </main>
+    <footer class="bottom-bar"><span>ConvoLens · Early prototype</span><span>For accessibility, not emergency alerting</span></footer>
+    <nav class="mobile-tabs" aria-label="Mobile navigation"><button class="mobile-tab active" data-page="listen" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 13h2l2-6 4 12 4-15 2 9h2"/></svg><span>Listen</span></button><button class="mobile-tab" data-page="reply"><svg viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Z"/></svg><span>Reply</span></button><button class="mobile-tab" data-page="saved"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4Z"/></svg><span>Saved</span></button><button class="mobile-tab" data-page="settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M9 4v6M16 14v6"/></svg><span>Settings</span></button></nav>
+  </div>
+
+  <dialog id="infoDialog" class="modal"><div class="modal-heading"><h2>About ConvoLens</h2><button class="close-button" data-close="infoDialog" aria-label="Close">×</button></div><p>This prototype offers a real microphone-level meter and browser-based live captions where supported.</p><ul><li><strong>Speaker identification:</strong> browser captions are unassigned. Tap any speaker label to name it manually. Automatic numbered speakers require a configured WhisperLiveKit server started with diarisation.</li><li><strong>Music and singing:</strong> no source-separation model is connected yet. The app does not pretend to filter them.</li><li><strong>Microphone meter:</strong> estimates input signal strength, not range in metres or recognition accuracy.</li><li><strong>Privacy:</strong> the app itself does not store raw recordings. Browser-native speech recognition may transmit audio to its provider. In AI server mode, microphone audio is deliberately streamed to the configured endpoint. Only transcripts you explicitly save are stored locally on your device.</li><li><strong>Limitations:</strong> browser speech services may require internet. Keep the app foregrounded while listening; microphone access and speech recognition can stop when the phone locks.</li></ul><button class="primary-button modal-ok" data-close="infoDialog">Understood</button></dialog>
+  <dialog id="installDialog" class="modal"><div class="modal-heading"><h2>Install ConvoLens</h2><button class="close-button" data-close="installDialog" aria-label="Close">×</button></div><div id="installHelp"></div><button class="primary-button modal-ok" data-close="installDialog">Got it</button></dialog>
+  <dialog id="speakerDialog" class="modal"><div class="modal-heading"><h2>Identify speaker</h2><button class="close-button" data-close="speakerDialog" aria-label="Close">×</button></div><p>Label this caption manually. Automatic speaker labels appear when a compatible AI server has diarisation enabled. You can override this caption manually.</p><form id="speakerForm"><label for="speakerName">Speaker name</label><input id="speakerName" type="text" maxlength="32" autocomplete="off" placeholder="e.g. Alex" required /><button type="submit" class="primary-button modal-ok">Save label</button></form></dialog>
+  <dialog id="fullscreenReply" class="full-reply"><button class="full-close" data-close="fullscreenReply" aria-label="Close fullscreen reply">× Close</button><div id="fullReplyText"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="./app.js" defer></script>
+</body>
+</html>

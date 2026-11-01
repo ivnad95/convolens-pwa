@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "ConvoLens — Accessible Conversations",
+  "short_name": "ConvoLens",
+  "description": "Live captions, microphone signal feedback and communication tools for Deaf and hard-of-hearing people.",
+  "start_url": "./#listen",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f9fd",
+  "theme_color": "#f7f9fd",
+  "orientation": "any",
+  "lang": "en-GB",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "categories": ["accessibility", "utilities", "productivity"]
+}

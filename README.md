@@ -1,5 +1,7 @@
 # ConvoLens — an installable accessibility web app
 
+**Live:** https://ivnad95.github.io/convolens-pwa/ (GitHub Pages, deployed from `main`).
+
 **Status:** Working PWA prototype, not a clinically or safety-validated accessibility product. The core design is mobile-first and supports iOS, Android and desktop browsers. No account or paid service is required for the interface and microphone meter.
 
 ## What works now

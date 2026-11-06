@@ -77,7 +77,8 @@
     });
     if (page === 'saved') renderSaved();
     if (updateHash && window.location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
-    if (page === 'listen') requestAnimationFrame(resizeCanvas);
+    if (page === 'listen') requestAnimationFrame(refreshWave);
+    else if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     window.scrollTo(0, 0);
   }
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
@@ -212,9 +213,15 @@
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     $canvas.width = Math.round(rect.width * dpr); $canvas.height = Math.round(rect.height * dpr);
   }
+  function refreshWave() {
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    if (document.visibilityState !== 'visible' || $('page-listen').hidden) return;
+    resizeCanvas(); drawWave();
+  }
   function drawWave() {
+    rafId = null;
     const width = $canvas.width, height = $canvas.height;
-    if (!width || !height) { rafId = requestAnimationFrame(drawWave); return; }
+    if (!width || !height) return;
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.strokeStyle = '#dbe4ff'; canvasContext.lineWidth = 1.3;
     canvasContext.beginPath(); canvasContext.moveTo(0, height / 2); canvasContext.lineTo(width, height / 2); canvasContext.stroke();
@@ -238,7 +245,7 @@
       $('signalMeter').setAttribute('aria-valuenow', String(Math.round(audioLevel)));
       $('signalText').textContent = db < -57 ? 'Very quiet' : db < -37 ? 'Quiet' : db < -18 ? 'Moderate' : 'Strong';
     }
-    rafId = requestAnimationFrame(drawWave);
+    if (analyser && document.visibilityState === 'visible' && !$('page-listen').hidden) rafId = requestAnimationFrame(drawWave);
   }
   async function openMicrophone() {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access requires a secure HTTPS page and supported browser.');
@@ -252,6 +259,7 @@
     const source = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = .76;
     audioData = new Uint8Array(analyser.fftSize); source.connect(analyser);
+    refreshWave();
     stream.getAudioTracks().forEach(track => { track.addEventListener('ended', () => { if (listening) { notice('The microphone was disconnected. Start a new session to reconnect.', 'warn'); stopListening(); } }); });
   }
   function isValidServerUrl(raw) {
@@ -437,6 +445,7 @@
     if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
     if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
     analyser = null; audioData = null; audioLevel = 0;
+    refreshWave();
     $('signalFill').style.width = '0%'; $('signalMeter').setAttribute('aria-valuenow', '0'); $('signalText').textContent = 'Not active';
     $('interim').hidden = true; setListeningUI(false); $('listenButton').disabled = false;
     updateMeta();
@@ -471,13 +480,14 @@
   window.addEventListener('appinstalled', () => { pendingInstall = null; toast('ConvoLens installed'); });
 
   document.addEventListener('visibilitychange', () => {
+    refreshWave();
     if (document.visibilityState === 'visible' && listening && stream?.getAudioTracks().some(track => track.readyState !== 'live' || track.muted)) {
       notice('The operating system may have suspended the microphone while the app was in the background. Restart listening if audio stops.', 'warn');
     }
   });
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', refreshWave);
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => { /* optional offline shell */ }));
   }
-  applySettings(); updateEmpty(); updateSavedCount(); navigate(location.hash.slice(1) || 'listen', false); resizeCanvas(); drawWave();
+  applySettings(); updateEmpty(); updateSavedCount(); navigate(location.hash.slice(1) || 'listen', false);
 })();

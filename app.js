@@ -38,6 +38,7 @@
   let serverLineStart = 0;
   let serverLineCount = 0;
   let serverStopRequested = false;
+  let followingLatest = true;
   const $canvas = $('waveCanvas');
   const canvasContext = $canvas.getContext('2d');
 
@@ -77,7 +78,7 @@
     });
     if (page === 'saved') renderSaved();
     if (updateHash && window.location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
-    if (page === 'listen') requestAnimationFrame(refreshWave);
+    if (page === 'listen') requestAnimationFrame(() => { refreshWave(); followCaptions(followingLatest); });
     else if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     window.scrollTo(0, 0);
   }
@@ -110,11 +111,18 @@
   }
   function updateEmpty() { $('emptyState').hidden = entries.length > 0; $('saveButton').disabled = entries.length === 0; $('copyButton').disabled = entries.length === 0; }
   function isAtLatest() {
+    if ($('page-listen').hidden) return followingLatest;
     const viewport = $('transcriptViewport');
     return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40;
   }
-  function updateLatestButton() { $('latestButton').hidden = isAtLatest(); }
+  function updateLatestButton() {
+    if ($('page-listen').hidden) return;
+    followingLatest = isAtLatest();
+    $('latestButton').hidden = followingLatest;
+  }
   function followCaptions(follow) {
+    followingLatest = follow;
+    if ($('page-listen').hidden) return;
     const viewport = $('transcriptViewport');
     if (follow) viewport.scrollTop = viewport.scrollHeight;
     updateLatestButton();

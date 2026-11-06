@@ -39,6 +39,9 @@
   let serverLineCount = 0;
   let serverStopRequested = false;
   let followingLatest = true;
+  let captionAnchor = null;
+  let programmaticScrollTop = null;
+  let restoreFrame = null;
   const $canvas = $('waveCanvas');
   const canvasContext = $canvas.getContext('2d');
 
@@ -69,6 +72,8 @@
   function updateMeta() { $('sessionMeta').textContent = duration(); }
   function navigate(page, updateHash = true) {
     if (!['listen', 'reply', 'saved', 'settings'].includes(page)) page = 'listen';
+    if (!$('page-listen').hidden && !followingLatest) captionAnchor = captureCaptionAnchor();
+    if (restoreFrame !== null) { cancelAnimationFrame(restoreFrame); restoreFrame = null; }
     document.querySelectorAll('.page').forEach(section => { section.hidden = section.id !== `page-${page}`; });
     document.querySelectorAll('[data-page]').forEach(button => {
       const active = button.dataset.page === page;
@@ -78,13 +83,20 @@
     });
     if (page === 'saved') renderSaved();
     if (updateHash && window.location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
-    if (page === 'listen') { followCaptions(followingLatest); requestAnimationFrame(refreshWave); }
+    if (page === 'listen') {
+      restoreFrame = requestAnimationFrame(() => {
+        restoreFrame = null;
+        followCaptions(followingLatest, captionAnchor);
+        refreshWave();
+      });
+    }
     else if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     window.scrollTo(0, 0);
   }
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
   window.addEventListener('hashchange', () => navigate(location.hash.slice(1), false));
   function applySettings() {
+    const anchor = !followingLatest ? captureCaptionAnchor() : null;
     document.documentElement.style.setProperty('--caption-size', ({ regular: '20px', large: '26px', extra: '34px' })[settings.fontSize] || '20px');
     $('languageSelect').value = settings.language;
     $('fontSizeSelect').value = settings.fontSize;
@@ -94,6 +106,7 @@
     $('diarizationToggle').checked = !!settings.serverDiarization;
     $('serverConfig').hidden = settings.engine !== 'server';
     updateEngineBadge();
+    followCaptions(followingLatest, anchor);
     try { localStorage.setItem(settingsKey, JSON.stringify(settings)); } catch { /* private browsing */ }
   }
   $('languageSelect').addEventListener('change', e => { settings.language = e.target.value; applySettings(); if (recognition) recognition.lang = settings.language; toast('Caption language updated'); });
@@ -115,24 +128,41 @@
     const viewport = $('transcriptViewport');
     return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40;
   }
-  function updateLatestButton() {
-    if ($('page-listen').hidden) return;
-    followingLatest = isAtLatest();
-    $('latestButton').hidden = followingLatest;
+  function captureCaptionAnchor() {
+    if ($('page-listen').hidden) return captionAnchor;
+    const top = $('transcriptViewport').getBoundingClientRect().top;
+    const row = [...$('messages').children].find(item => item.getBoundingClientRect().bottom > top);
+    return row ? { id: row.dataset.id, offset: row.getBoundingClientRect().top - top } : null;
   }
-  function followCaptions(follow) {
+  function updateLatestButton() {
+    const button = $('latestButton');
+    if (button) button.hidden = followingLatest;
+  }
+  function followCaptions(follow, anchor = null) {
     followingLatest = follow;
+    updateLatestButton();
     if ($('page-listen').hidden) return;
     const viewport = $('transcriptViewport');
     if (follow) viewport.scrollTop = viewport.scrollHeight;
-    updateLatestButton();
+    else if (anchor) {
+      const row = [...$('messages').children].find(item => item.dataset.id === anchor.id);
+      if (row) viewport.scrollTop += row.getBoundingClientRect().top - viewport.getBoundingClientRect().top - anchor.offset;
+    }
+    // Scroll events arrive asynchronously, including those caused by restoration.
+    programmaticScrollTop = viewport.scrollTop;
+    captionAnchor = follow ? null : captureCaptionAnchor();
   }
-  $('transcriptViewport').addEventListener('scroll', updateLatestButton);
-  $('latestButton').addEventListener('click', () => followCaptions(true));
+  $('transcriptViewport').addEventListener('scroll', () => {
+    if ($('page-listen').hidden || restoreFrame !== null || $('transcriptViewport').scrollTop === programmaticScrollTop) return;
+    followingLatest = isAtLatest();
+    captionAnchor = followingLatest ? null : captureCaptionAnchor();
+    updateLatestButton();
+  });
+  $('latestButton')?.addEventListener('click', () => followCaptions(true));
   function addCaption(text, options = {}) {
     const clean = (text || '').trim(); if (!clean) return;
     if (!options.fromServer && entries.length > 0 && entries[entries.length - 1].text === clean && Date.now() - entries[entries.length - 1].created < 1700) return;
-    const follow = options.deferFollow ? false : isAtLatest();
+    const follow = options.deferFollow ? false : followingLatest;
     const caption = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), created: Date.now(), text: clean, speaker: options.speaker || '', automatic: !!options.automatic };
     entries.push(caption);
     const row = document.createElement('div'); row.className = 'message'; row.dataset.id = caption.id;
@@ -174,6 +204,7 @@
   });
   $('clearButton').addEventListener('click', () => {
     if (entries.length && !confirm('Clear the current conversation? Unsaved captions will be lost.')) return;
+    captionAnchor = null;
     entries = []; serverLineStart = 0; serverLineCount = 0; $('messages').replaceChildren(); $('interim').hidden = true; updateEmpty(); updateMeta(); updateLatestButton(); toast('Current conversation cleared');
   });
   function updateSavedCount() { $('savedCount').textContent = saved.length; }
@@ -279,7 +310,8 @@
   function updateServerLines(lines) {
     if (!Array.isArray(lines)) return;
     // WhisperLiveKit full mode resends all committed lines. Reconcile them by position.
-    const follow = isAtLatest();
+    const follow = followingLatest;
+    const anchor = !follow ? captureCaptionAnchor() : null;
     const children = $('messages').children;
     const actual = lines.filter(line => line && typeof line.text === 'string' && line.text.trim());
     if (actual.length < serverLineCount) {
@@ -307,7 +339,7 @@
       }
     });
     serverLineCount = actual.length;
-    updateEmpty(); updateMeta(); followCaptions(follow);
+    updateEmpty(); updateMeta(); followCaptions(follow, anchor);
   }
   function handleServerMessage(event) {
     let payload;
@@ -325,7 +357,7 @@
       notice('AI server reported an error: ' + (payload.error || 'speech processing failed'), 'error'); return;
     }
     if (payload.type === 'ready_to_stop') { try { ws?.close(); } catch {} return; }
-    const follow = isAtLatest();
+    const follow = followingLatest;
     if (Array.isArray(payload.lines)) updateServerLines(payload.lines);
     const interim = payload.buffer_transcription || payload.buffer_diarization || '';
     $('interimText').textContent = interim;
@@ -384,7 +416,7 @@
     recognition = new Recognition(); recognition.lang = settings.language; recognition.continuous = true; recognition.interimResults = true; recognition.maxAlternatives = 1;
     recognition.onstart = () => { recognitionEnabled = true; recognitionRestarts = 0; if (listening) notice('Live captions are active. Tap a speaker label to identify them manually.'); };
     recognition.onresult = event => {
-      const follow = isAtLatest();
+      const follow = followingLatest;
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]; const phrase = result[0]?.transcript?.trim();

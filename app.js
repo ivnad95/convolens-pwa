@@ -132,7 +132,7 @@
   function addCaption(text, options = {}) {
     const clean = (text || '').trim(); if (!clean) return;
     if (!options.fromServer && entries.length > 0 && entries[entries.length - 1].text === clean && Date.now() - entries[entries.length - 1].created < 1700) return;
-    const follow = isAtLatest();
+    const follow = options.deferFollow ? false : isAtLatest();
     const caption = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), created: Date.now(), text: clean, speaker: options.speaker || '', automatic: !!options.automatic };
     entries.push(caption);
     const row = document.createElement('div'); row.className = 'message'; row.dataset.id = caption.id;

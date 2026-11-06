@@ -78,7 +78,7 @@
     });
     if (page === 'saved') renderSaved();
     if (updateHash && window.location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
-    if (page === 'listen') requestAnimationFrame(() => { refreshWave(); followCaptions(followingLatest); });
+    if (page === 'listen') { followCaptions(followingLatest); requestAnimationFrame(refreshWave); }
     else if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     window.scrollTo(0, 0);
   }

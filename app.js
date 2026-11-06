@@ -108,9 +108,22 @@
     $('captionBadge').className = 'feature-status' + (available ? '' : ' missing');
   }
   function updateEmpty() { $('emptyState').hidden = entries.length > 0; $('saveButton').disabled = entries.length === 0; $('copyButton').disabled = entries.length === 0; }
+  function isAtLatest() {
+    const viewport = $('transcriptViewport');
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40;
+  }
+  function updateLatestButton() { $('latestButton').hidden = isAtLatest(); }
+  function followCaptions(follow) {
+    const viewport = $('transcriptViewport');
+    if (follow) viewport.scrollTop = viewport.scrollHeight;
+    updateLatestButton();
+  }
+  $('transcriptViewport').addEventListener('scroll', updateLatestButton);
+  $('latestButton').addEventListener('click', () => followCaptions(true));
   function addCaption(text, options = {}) {
     const clean = (text || '').trim(); if (!clean) return;
     if (!options.fromServer && entries.length > 0 && entries[entries.length - 1].text === clean && Date.now() - entries[entries.length - 1].created < 1700) return;
+    const follow = isAtLatest();
     const caption = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), created: Date.now(), text: clean, speaker: options.speaker || '', automatic: !!options.automatic };
     entries.push(caption);
     const row = document.createElement('div'); row.className = 'message'; row.dataset.id = caption.id;
@@ -124,7 +137,7 @@
     const body = document.createElement('div'); body.className = 'message-body'; body.textContent = clean;
     head.append(speaker, time); copy.append(head, body); row.append(avatar, copy); $('messages').append(row);
     updateEmpty(); updateMeta();
-    $('transcriptViewport').scrollTop = $('transcriptViewport').scrollHeight;
+    if (!options.deferFollow) followCaptions(follow);
     if (settings.vibrate && navigator.vibrate) navigator.vibrate(30);
   }
   $('speakerForm').addEventListener('submit', event => {
@@ -152,7 +165,7 @@
   });
   $('clearButton').addEventListener('click', () => {
     if (entries.length && !confirm('Clear the current conversation? Unsaved captions will be lost.')) return;
-    entries = []; serverLineStart = 0; serverLineCount = 0; $('messages').replaceChildren(); $('interim').hidden = true; updateEmpty(); updateMeta(); toast('Current conversation cleared');
+    entries = []; serverLineStart = 0; serverLineCount = 0; $('messages').replaceChildren(); $('interim').hidden = true; updateEmpty(); updateMeta(); updateLatestButton(); toast('Current conversation cleared');
   });
   function updateSavedCount() { $('savedCount').textContent = saved.length; }
   function renderSaved() {
@@ -250,24 +263,25 @@
   function updateServerLines(lines) {
     if (!Array.isArray(lines)) return;
     // WhisperLiveKit full mode resends all committed lines. Reconcile them by position.
+    const follow = isAtLatest();
+    const children = $('messages').children;
     const actual = lines.filter(line => line && typeof line.text === 'string' && line.text.trim());
     if (actual.length < serverLineCount) {
       const toRemove = serverLineCount - actual.length;
       entries.splice(serverLineStart + actual.length, toRemove);
-      const elements = [...$('messages').children];
-      for (let i = serverLineStart + actual.length; i < serverLineStart + serverLineCount; i++) elements[i]?.remove();
+      for (let i = 0; i < toRemove; i++) children[serverLineStart + actual.length]?.remove();
     }
     actual.forEach((line, index) => {
       const pos = serverLineStart + index;
       const predicted = settings.serverDiarization && Number(line.speaker) > 0 ? `Speaker ${line.speaker}` : '';
       const existing = entries[pos];
-      if (!existing) addCaption(line.text, { speaker: predicted, automatic: !!predicted, fromServer: true });
+      if (!existing) addCaption(line.text, { speaker: predicted, automatic: !!predicted, fromServer: true, deferFollow: true });
       else {
         let changed = false;
         if (existing.text !== line.text) { existing.text = line.text; changed = true; }
         if (existing.automatic && existing.speaker !== predicted) { existing.speaker = predicted; changed = true; }
         if (changed) {
-          const row = [...$('messages').children].find(element => element.dataset.id === existing.id);
+          const row = children[pos];
           if (row) {
             row.querySelector('.message-body').textContent = existing.text;
             row.querySelector('.speaker-name').textContent = existing.speaker ? `${existing.speaker} · Edit` : 'Speaker unknown · Edit';
@@ -277,7 +291,7 @@
       }
     });
     serverLineCount = actual.length;
-    updateEmpty(); updateMeta();
+    updateEmpty(); updateMeta(); followCaptions(follow);
   }
   function handleServerMessage(event) {
     let payload;
@@ -295,10 +309,12 @@
       notice('AI server reported an error: ' + (payload.error || 'speech processing failed'), 'error'); return;
     }
     if (payload.type === 'ready_to_stop') { try { ws?.close(); } catch {} return; }
+    const follow = isAtLatest();
     if (Array.isArray(payload.lines)) updateServerLines(payload.lines);
     const interim = payload.buffer_transcription || payload.buffer_diarization || '';
     $('interimText').textContent = interim;
     $('interim').hidden = !interim;
+    followCaptions(follow);
   }
   async function initialiseServerRecognition() {
     if (!isValidServerUrl(settings.serverUrl)) {
@@ -352,6 +368,7 @@
     recognition = new Recognition(); recognition.lang = settings.language; recognition.continuous = true; recognition.interimResults = true; recognition.maxAlternatives = 1;
     recognition.onstart = () => { recognitionEnabled = true; recognitionRestarts = 0; if (listening) notice('Live captions are active. Tap a speaker label to identify them manually.'); };
     recognition.onresult = event => {
+      const follow = isAtLatest();
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]; const phrase = result[0]?.transcript?.trim();
@@ -360,7 +377,7 @@
       }
       $('interim').hidden = !interim;
       $('interimText').textContent = interim;
-      if (interim) $('transcriptViewport').scrollTop = $('transcriptViewport').scrollHeight;
+      followCaptions(follow);
     };
     recognition.onerror = event => {
       const reason = event.error || 'unknown';

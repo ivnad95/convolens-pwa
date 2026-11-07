@@ -8,6 +8,7 @@
 
 - Installable PWA: app manifest, 192/512 px icons, standalone layout, cached app shell.
 - Live microphone input meter and actual waveform (not simulated when the microphone is active).
+- Captions stay in place while you review earlier text, with a button to return to the latest caption.
 - Browser speech recognition where the browser provides `SpeechRecognition` or `webkitSpeechRecognition`. This may use a cloud service, and is not available consistently on every phone/browser.
 - **Optional WhisperLiveKit streaming backend**, configurable in Preferences, supporting real AI transcription and numbered speaker IDs when diarisation is enabled on the backend.
 - Manual speaker labelling per caption, even when no AI server is connected.
@@ -63,6 +64,8 @@ whisperlivekit-server --model base --language en --pcm-input --diarization --hos
 Host this server behind a reverse proxy providing **WSS** and transport security. In Preferences → Caption engine, select **Self-hosted WhisperLiveKit**, enter `wss://YOUR-AI-DOMAIN/asr`, and tick the diarisation checkbox **only if** the server really is using `--diarization`.
 
 This feature is **integrated but not tested against a running real model** in this package; server model downloads, weight licences, capacity, and browser audio interoperability must be validated separately. The server is not included or deployed here.
+
+The app reconciles repeated server transcript updates in the browser. The microphone waveform only animates while the listen screen is visible and the microphone is active; neither change alters server inference performance.
 
 ## Privacy and accessibility notes
 

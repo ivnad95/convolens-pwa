@@ -38,6 +38,10 @@
   let serverLineStart = 0;
   let serverLineCount = 0;
   let serverStopRequested = false;
+  let followingLatest = true;
+  let captionAnchor = null;
+  let programmaticScrollTop = null;
+  let restoreFrame = null;
   const $canvas = $('waveCanvas');
   const canvasContext = $canvas.getContext('2d');
 
@@ -68,6 +72,8 @@
   function updateMeta() { $('sessionMeta').textContent = duration(); }
   function navigate(page, updateHash = true) {
     if (!['listen', 'reply', 'saved', 'settings'].includes(page)) page = 'listen';
+    if (!$('page-listen').hidden && !followingLatest) captionAnchor = captureCaptionAnchor();
+    if (restoreFrame !== null) { cancelAnimationFrame(restoreFrame); restoreFrame = null; }
     document.querySelectorAll('.page').forEach(section => { section.hidden = section.id !== `page-${page}`; });
     document.querySelectorAll('[data-page]').forEach(button => {
       const active = button.dataset.page === page;
@@ -77,12 +83,20 @@
     });
     if (page === 'saved') renderSaved();
     if (updateHash && window.location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
-    if (page === 'listen') requestAnimationFrame(resizeCanvas);
+    if (page === 'listen') {
+      restoreFrame = requestAnimationFrame(() => {
+        restoreFrame = null;
+        followCaptions(followingLatest, captionAnchor);
+        refreshWave();
+      });
+    }
+    else if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
     window.scrollTo(0, 0);
   }
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
   window.addEventListener('hashchange', () => navigate(location.hash.slice(1), false));
   function applySettings() {
+    const anchor = !followingLatest ? captureCaptionAnchor() : null;
     document.documentElement.style.setProperty('--caption-size', ({ regular: '20px', large: '26px', extra: '34px' })[settings.fontSize] || '20px');
     $('languageSelect').value = settings.language;
     $('fontSizeSelect').value = settings.fontSize;
@@ -92,6 +106,7 @@
     $('diarizationToggle').checked = !!settings.serverDiarization;
     $('serverConfig').hidden = settings.engine !== 'server';
     updateEngineBadge();
+    followCaptions(followingLatest, anchor);
     try { localStorage.setItem(settingsKey, JSON.stringify(settings)); } catch { /* private browsing */ }
   }
   $('languageSelect').addEventListener('change', e => { settings.language = e.target.value; applySettings(); if (recognition) recognition.lang = settings.language; toast('Caption language updated'); });
@@ -108,9 +123,46 @@
     $('captionBadge').className = 'feature-status' + (available ? '' : ' missing');
   }
   function updateEmpty() { $('emptyState').hidden = entries.length > 0; $('saveButton').disabled = entries.length === 0; $('copyButton').disabled = entries.length === 0; }
+  function isAtLatest() {
+    if ($('page-listen').hidden) return followingLatest;
+    const viewport = $('transcriptViewport');
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40;
+  }
+  function captureCaptionAnchor() {
+    if ($('page-listen').hidden) return captionAnchor;
+    const top = $('transcriptViewport').getBoundingClientRect().top;
+    const row = [...$('messages').children].find(item => item.getBoundingClientRect().bottom > top);
+    return row ? { id: row.dataset.id, offset: row.getBoundingClientRect().top - top } : null;
+  }
+  function updateLatestButton() {
+    const button = $('latestButton');
+    if (button) button.hidden = followingLatest;
+  }
+  function followCaptions(follow, anchor = null) {
+    followingLatest = follow;
+    updateLatestButton();
+    if ($('page-listen').hidden) return;
+    const viewport = $('transcriptViewport');
+    if (follow) viewport.scrollTop = viewport.scrollHeight;
+    else if (anchor) {
+      const row = [...$('messages').children].find(item => item.dataset.id === anchor.id);
+      if (row) viewport.scrollTop += row.getBoundingClientRect().top - viewport.getBoundingClientRect().top - anchor.offset;
+    }
+    // Scroll events arrive asynchronously, including those caused by restoration.
+    programmaticScrollTop = viewport.scrollTop;
+    captionAnchor = follow ? null : captureCaptionAnchor();
+  }
+  $('transcriptViewport').addEventListener('scroll', () => {
+    if ($('page-listen').hidden || restoreFrame !== null || $('transcriptViewport').scrollTop === programmaticScrollTop) return;
+    followingLatest = isAtLatest();
+    captionAnchor = followingLatest ? null : captureCaptionAnchor();
+    updateLatestButton();
+  });
+  $('latestButton')?.addEventListener('click', () => followCaptions(true));
   function addCaption(text, options = {}) {
     const clean = (text || '').trim(); if (!clean) return;
     if (!options.fromServer && entries.length > 0 && entries[entries.length - 1].text === clean && Date.now() - entries[entries.length - 1].created < 1700) return;
+    const follow = options.deferFollow ? false : followingLatest;
     const caption = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), created: Date.now(), text: clean, speaker: options.speaker || '', automatic: !!options.automatic };
     entries.push(caption);
     const row = document.createElement('div'); row.className = 'message'; row.dataset.id = caption.id;
@@ -124,7 +176,7 @@
     const body = document.createElement('div'); body.className = 'message-body'; body.textContent = clean;
     head.append(speaker, time); copy.append(head, body); row.append(avatar, copy); $('messages').append(row);
     updateEmpty(); updateMeta();
-    $('transcriptViewport').scrollTop = $('transcriptViewport').scrollHeight;
+    if (!options.deferFollow) followCaptions(follow);
     if (settings.vibrate && navigator.vibrate) navigator.vibrate(30);
   }
   $('speakerForm').addEventListener('submit', event => {
@@ -152,7 +204,8 @@
   });
   $('clearButton').addEventListener('click', () => {
     if (entries.length && !confirm('Clear the current conversation? Unsaved captions will be lost.')) return;
-    entries = []; serverLineStart = 0; serverLineCount = 0; $('messages').replaceChildren(); $('interim').hidden = true; updateEmpty(); updateMeta(); toast('Current conversation cleared');
+    captionAnchor = null;
+    entries = []; serverLineStart = 0; serverLineCount = 0; $('messages').replaceChildren(); $('interim').hidden = true; updateEmpty(); updateMeta(); updateLatestButton(); toast('Current conversation cleared');
   });
   function updateSavedCount() { $('savedCount').textContent = saved.length; }
   function renderSaved() {
@@ -199,9 +252,15 @@
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     $canvas.width = Math.round(rect.width * dpr); $canvas.height = Math.round(rect.height * dpr);
   }
+  function refreshWave() {
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    if (document.visibilityState !== 'visible' || $('page-listen').hidden) return;
+    resizeCanvas(); drawWave();
+  }
   function drawWave() {
+    rafId = null;
     const width = $canvas.width, height = $canvas.height;
-    if (!width || !height) { rafId = requestAnimationFrame(drawWave); return; }
+    if (!width || !height) return;
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.strokeStyle = '#dbe4ff'; canvasContext.lineWidth = 1.3;
     canvasContext.beginPath(); canvasContext.moveTo(0, height / 2); canvasContext.lineTo(width, height / 2); canvasContext.stroke();
@@ -225,7 +284,7 @@
       $('signalMeter').setAttribute('aria-valuenow', String(Math.round(audioLevel)));
       $('signalText').textContent = db < -57 ? 'Very quiet' : db < -37 ? 'Quiet' : db < -18 ? 'Moderate' : 'Strong';
     }
-    rafId = requestAnimationFrame(drawWave);
+    if (analyser && document.visibilityState === 'visible' && !$('page-listen').hidden) rafId = requestAnimationFrame(drawWave);
   }
   async function openMicrophone() {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access requires a secure HTTPS page and supported browser.');
@@ -239,6 +298,7 @@
     const source = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = .76;
     audioData = new Uint8Array(analyser.fftSize); source.connect(analyser);
+    refreshWave();
     stream.getAudioTracks().forEach(track => { track.addEventListener('ended', () => { if (listening) { notice('The microphone was disconnected. Start a new session to reconnect.', 'warn'); stopListening(); } }); });
   }
   function isValidServerUrl(raw) {
@@ -250,24 +310,26 @@
   function updateServerLines(lines) {
     if (!Array.isArray(lines)) return;
     // WhisperLiveKit full mode resends all committed lines. Reconcile them by position.
+    const follow = followingLatest;
+    const anchor = !follow ? captureCaptionAnchor() : null;
+    const children = $('messages').children;
     const actual = lines.filter(line => line && typeof line.text === 'string' && line.text.trim());
     if (actual.length < serverLineCount) {
       const toRemove = serverLineCount - actual.length;
       entries.splice(serverLineStart + actual.length, toRemove);
-      const elements = [...$('messages').children];
-      for (let i = serverLineStart + actual.length; i < serverLineStart + serverLineCount; i++) elements[i]?.remove();
+      for (let i = 0; i < toRemove; i++) children[serverLineStart + actual.length]?.remove();
     }
     actual.forEach((line, index) => {
       const pos = serverLineStart + index;
       const predicted = settings.serverDiarization && Number(line.speaker) > 0 ? `Speaker ${line.speaker}` : '';
       const existing = entries[pos];
-      if (!existing) addCaption(line.text, { speaker: predicted, automatic: !!predicted, fromServer: true });
+      if (!existing) addCaption(line.text, { speaker: predicted, automatic: !!predicted, fromServer: true, deferFollow: true });
       else {
         let changed = false;
         if (existing.text !== line.text) { existing.text = line.text; changed = true; }
         if (existing.automatic && existing.speaker !== predicted) { existing.speaker = predicted; changed = true; }
         if (changed) {
-          const row = [...$('messages').children].find(element => element.dataset.id === existing.id);
+          const row = children[pos];
           if (row) {
             row.querySelector('.message-body').textContent = existing.text;
             row.querySelector('.speaker-name').textContent = existing.speaker ? `${existing.speaker} · Edit` : 'Speaker unknown · Edit';
@@ -277,7 +339,7 @@
       }
     });
     serverLineCount = actual.length;
-    updateEmpty(); updateMeta();
+    updateEmpty(); updateMeta(); followCaptions(follow, anchor);
   }
   function handleServerMessage(event) {
     let payload;
@@ -295,10 +357,12 @@
       notice('AI server reported an error: ' + (payload.error || 'speech processing failed'), 'error'); return;
     }
     if (payload.type === 'ready_to_stop') { try { ws?.close(); } catch {} return; }
+    const follow = followingLatest;
     if (Array.isArray(payload.lines)) updateServerLines(payload.lines);
     const interim = payload.buffer_transcription || payload.buffer_diarization || '';
     $('interimText').textContent = interim;
     $('interim').hidden = !interim;
+    followCaptions(follow);
   }
   async function initialiseServerRecognition() {
     if (!isValidServerUrl(settings.serverUrl)) {
@@ -352,6 +416,7 @@
     recognition = new Recognition(); recognition.lang = settings.language; recognition.continuous = true; recognition.interimResults = true; recognition.maxAlternatives = 1;
     recognition.onstart = () => { recognitionEnabled = true; recognitionRestarts = 0; if (listening) notice('Live captions are active. Tap a speaker label to identify them manually.'); };
     recognition.onresult = event => {
+      const follow = followingLatest;
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]; const phrase = result[0]?.transcript?.trim();
@@ -360,7 +425,7 @@
       }
       $('interim').hidden = !interim;
       $('interimText').textContent = interim;
-      if (interim) $('transcriptViewport').scrollTop = $('transcriptViewport').scrollHeight;
+      followCaptions(follow);
     };
     recognition.onerror = event => {
       const reason = event.error || 'unknown';
@@ -420,6 +485,7 @@
     if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
     if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
     analyser = null; audioData = null; audioLevel = 0;
+    refreshWave();
     $('signalFill').style.width = '0%'; $('signalMeter').setAttribute('aria-valuenow', '0'); $('signalText').textContent = 'Not active';
     $('interim').hidden = true; setListeningUI(false); $('listenButton').disabled = false;
     updateMeta();
@@ -454,13 +520,14 @@
   window.addEventListener('appinstalled', () => { pendingInstall = null; toast('ConvoLens installed'); });
 
   document.addEventListener('visibilitychange', () => {
+    refreshWave();
     if (document.visibilityState === 'visible' && listening && stream?.getAudioTracks().some(track => track.readyState !== 'live' || track.muted)) {
       notice('The operating system may have suspended the microphone while the app was in the background. Restart listening if audio stops.', 'warn');
     }
   });
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', refreshWave);
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => { /* optional offline shell */ }));
   }
-  applySettings(); updateEmpty(); updateSavedCount(); navigate(location.hash.slice(1) || 'listen', false); resizeCanvas(); drawWave();
+  applySettings(); updateEmpty(); updateSavedCount(); navigate(location.hash.slice(1) || 'listen', false);
 })();
